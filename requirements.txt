@@ -1,0 +1,8 @@
+torch>=2.0.0
+numpy>=1.24.0
+matplotlib>=3.7.0
+pypianoroll==0.5.3
+pretty_midi>=0.2.10
+tqdm>=4.65.0
+scikit-learn>=1.2.0
+streamlit>=1.28.0

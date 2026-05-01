@@ -1,0 +1,34 @@
+# Data
+data/
+*.npz
+*.npy
+*.tar.gz
+*.zip
+
+# Checkpoints
+checkpoints/*.pt
+checkpoints/*.pth
+!checkpoints/.gitkeep
+
+# Outputs (commit only curated examples)
+outputs/midi_examples/*.mid
+!outputs/midi_examples/example_*.mid
+
+# Python
+__pycache__/
+*.py[cod]
+.env
+venv/
+.venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+*.log
+runs/
+logs/
+
+# OS
+.DS_Store
+.vscode/
