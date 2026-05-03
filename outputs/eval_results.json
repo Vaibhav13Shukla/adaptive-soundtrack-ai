@@ -1,0 +1,26 @@
+{
+  "Pop_Rock": {
+    "pitch_entropy": 3.972,
+    "note_density": 0.0378,
+    "pitch_range_used": 54.5,
+    "scale_consistency": 0.536
+  },
+  "Electronic": {
+    "pitch_entropy": 4.12,
+    "note_density": 0.0535,
+    "pitch_range_used": 54.0,
+    "scale_consistency": 0.678
+  },
+  "Rap": {
+    "pitch_entropy": 3.7,
+    "note_density": 0.0397,
+    "pitch_range_used": 45.2,
+    "scale_consistency": 0.56
+  },
+  "Jazz": {
+    "pitch_entropy": 4.19,
+    "note_density": 0.0619,
+    "pitch_range_used": 52.0,
+    "scale_consistency": 0.617
+  }
+}
