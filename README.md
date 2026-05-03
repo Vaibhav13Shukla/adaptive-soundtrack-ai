@@ -1,109 +1,51 @@
-# Adaptive Soundtrack AI
+# 🎹 Adaptive Soundtrack AI
 
-**Conditional Diffusion → Genre-Controlled MIDI**
+![Loss Curve](plots/loss_curve.png)
 
-Generate editable piano rolls conditioned on musical genre using a class-conditional DDPM. Trained on the Lakh Pianoroll Dataset. Outputs are MIDI files playable in any DAW.
+A Generative AI model that generates genre-controlled piano rolls (music) from pure noise using a **Conditional Denoising Diffusion Probabilistic Model (DDPM)**. 
 
+Trained on the LPD-5 (Lakh Pianoroll Dataset) cleansed subset for 120+ epochs, achieving a final validation loss of **0.0048**.
 
----
+## 🚀 Features
+- **Genre Conditioning:** Capable of generating music tailored to 4 specific genres: `Pop_Rock`, `Electronic`, `Rap`, and `Jazz`.
+- **Classifier-Free Guidance (CFG):** Allows tuning the strength of the genre conditioning during inference.
+- **Fast Sampling:** Uses DDIM (Denoising Diffusion Implicit Models) to generate samples in just 50 steps instead of the full 1000 diffusion steps.
+- **Interactive UI:** Built-in Streamlit app for real-time music generation and MIDI export.
 
-## Demo
+## 🧠 Architecture
+- **Input:** Pure Gaussian noise `(B, 1, 64, 88)` representing 4 bars of 16th notes across 88 piano keys.
+- **Backbone:** U-Net architecture with residual blocks and attention mechanisms.
+- **Conditioning:** Genre labels are passed through a learned embedding, added to the sinusoidal timestep embedding, and injected into the U-Net via FiLM (Feature-wise Linear Modulation).
+- **Output:** Binarized piano roll converted to standard `.mid` format.
 
-```bash
-streamlit run app.py
-```
+## 📊 Quantitative Results (Epoch 62)
 
-Pick a genre → generate → download MIDI.
+| Genre      | Pitch Entropy | Note Density | Pitch Range Used | Scale Consistency |
+|------------|---------------|--------------|------------------|-------------------|
+| Pop_Rock   | 3.972         | 0.0378       | 54.5             | 0.536             |
+| Electronic | 4.120         | 0.0535       | 54.0             | 0.678             |
+| Rap        | 3.700         | 0.0397       | 45.2             | 0.560             |
+| Jazz       | 4.190         | 0.0619       | 52.0             | 0.617             |
 
----
+## 💻 Local Setup & Inference
 
-## What & Why
+1. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-Music generation tools (Suno, Riffusion, Stable Audio) output raw audio waveforms — opaque, expensive, not editable. We generate **symbolic music** (MIDI) using diffusion. Output is a piano roll you can drop into FL Studio, Ableton, or Unity.
+2. **Run the Streamlit App:**
+   ```bash
+   streamlit run app.py
+   ```
+3. Open `http://localhost:8501` in your browser.
+4. Select a genre, adjust CFG scale and DDIM steps, and click **Generate**.
+5. Download the output as a `.mid` file and open it in any DAW (Ableton, FL Studio, GarageBand) or online MIDI player to hear the music!
 
-Not competing with Suno. Different layer of the stack: editable structure, not frozen audio.
-
----
-
-## Course Concepts Applied
-
-| Concept | Where in code |
-|---|---|
-| Manifold hypothesis | `src/ddpm.py` (forward diffusion comments) |
-| Forward diffusion q(x_t \| x_{t-1}) | `src/ddpm.py:q_sample` |
-| Reverse diffusion / denoising | `src/ddpm.py:p_losses` |
-| U-Net noise prediction | `src/unet.py` |
-| Sinusoidal time embedding | `src/unet.py:SinusoidalPosEmb` |
-| Class-conditional generation | `src/unet.py:TimeGenreEmbedding` |
-| Classifier-free guidance | `src/ddpm.py:p_losses` (dropout), `ddim_sample` (interpolation) |
-| Score function ∇_x log q(x_t) | `src/ddpm.py` (referenced in DDIM sampler) |
-| DDIM fast sampling | `src/ddpm.py:ddim_sample` |
-
----
-
-## Quickstart
-
-```bash
-git clone https://github.com/YOUR_USER/adaptive-soundtrack-ai
-cd adaptive-soundtrack-ai
-pip install -r requirements.txt
-
-# Download trained checkpoint from Kaggle (manual)
-# Place in: checkpoints/checkpoint_best.pt
-
-# Run demo
-streamlit run app.py
-```
-
----
-
-## Dataset
-
-**Lakh Pianoroll Dataset** (LPD-5-cleansed)
-- 21,425 five-track piano rolls
-- 4/4 time signature only
-- Genre labels via Million Song Dataset matching
-- We use the Piano track; binarize, slice into 64-step windows
-
-Available on Kaggle: `cloudoak/lpd-5-cleansed`
-
----
-
-## Project Structure
-
-```
-configs/config.py          ← All hyperparameters
-src/                       ← Library code
-  dataset.py               ← PyTorch Dataset + DataLoaders
-  unet.py                  ← Conditional U-Net
-  ddpm.py                  ← Diffusion engine + DDIM sampling
-  trainer.py               ← Training loop + checkpointing
-  midi_utils.py            ← Piano roll ↔ MIDI conversion
-  evaluate.py              ← Quantitative metrics
-notebooks/                 ← One per day, run on Kaggle in order
-train.py                   ← Single command training
-infer.py                   ← Generate samples
-app.py                     ← Streamlit demo
-```
-
----
-
-## Results
-
-(Updated after Day 4)
-
-| Metric | Unconditional | Conditional (CFG=3.0) |
-|---|---|---|
-| Val Loss | TBD | TBD |
-| Pitch Entropy | TBD | TBD |
-| Scale Consistency | TBD | TBD |
-| Genre Classifier Acc | — | TBD |
-
----
-
-## Acknowledgements
-
-- Lakh Pianoroll Dataset: Dong et al., AAAI 2018
-- DDPM: Ho et al., NeurIPS 2020
-- Classifier-Free Guidance: Ho & Salimans, 2022
-- DDIM: Song et al., ICLR 2021
+## 📁 Repository Structure
+- `app.py`: Streamlit inference UI.
+- `src/`: Core model code (`unet.py`, `ddpm.py`, `trainer.py`, `dataset.py`).
+- `notebooks/`: Kaggle notebooks for data processing and training.
+- `configs/`: Hyperparameters and paths.
+- `plots/` & `outputs/`: Training metrics and generated examples.
+- `checkpoints/`: Model weights (`checkpoint_best.pt` required for inference).
