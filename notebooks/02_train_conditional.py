@@ -11,17 +11,27 @@ Setup on Kaggle:
 4. Clone your repo (has all src/ code)
 """
 
-# ── Cell 1: Clone repo + install deps ────────────────────────────
-"""
-!git clone https://<TOKEN>@github.com/Vaibhav13Shukla/adaptive-soundtrack-ai.git /kaggle/working/repo
-!pip install pretty_midi -q
-"""
-
-# ── Cell 2: Setup paths ──────────────────────────────────────────
+# ── Cell 1: Setup paths & copy code ───────────────────────────────
 import sys, os, shutil
 from pathlib import Path
 
 REPO = Path("/kaggle/working/repo")
+REPO.mkdir(parents=True, exist_ok=True)
+
+# Kaggle auto-unzips uploaded zip files. Let's find where it put our code:
+input_dir = Path("/kaggle/input")
+for src_dir in input_dir.rglob("src"):
+    if src_dir.is_dir() and (src_dir.parent / "configs").exists():
+        print(f"Found code at: {src_dir.parent}")
+        # Copy to working directory
+        if not (REPO / "src").exists():
+            shutil.copytree(src_dir, REPO / "src")
+        if not (REPO / "configs").exists():
+            shutil.copytree(src_dir.parent / "configs", REPO / "configs")
+        break
+else:
+    print("⚠ Could not find src/ and configs/ in /kaggle/input/. Did you upload project_code.zip?")
+
 sys.path.insert(0, str(REPO))
 
 # Copy dataset into repo structure
@@ -29,17 +39,16 @@ DATA_SRC = Path("/kaggle/input")  # adjust to your dataset source
 DEST = REPO / "data" / "processed"
 DEST.mkdir(parents=True, exist_ok=True)
 
-# Find the .npz — could be in notebook output or uploaded dataset
-for candidate in [
-    DATA_SRC / "lpd5-piano-genre" / "lpd5_piano_genre.npz",
-    DATA_SRC / "lpd5_piano_genre.npz",
-    Path("/kaggle/working/lpd5_piano_genre.npz"),
-]:
-    if candidate.exists():
-        shutil.copy(candidate, DEST / "lpd5_piano_genre.npz")
-        print(f"✓ Copied dataset from {candidate}")
+# Find the .npz dataset using robust auto-discovery
+dataset_copied = False
+for npz_file in DATA_SRC.rglob("lpd5_piano_genre.npz"):
+    if npz_file.is_file():
+        shutil.copy(npz_file, DEST / "lpd5_piano_genre.npz")
+        print(f"✓ Copied dataset from {npz_file}")
+        dataset_copied = True
         break
-else:
+
+if not dataset_copied:
     print("⚠ Dataset not found. Upload lpd5_piano_genre.npz as a Kaggle dataset.")
 
 # ── Cell 3: Verify setup ─────────────────────────────────────────
@@ -55,7 +64,7 @@ print(f"Device: {device}")
 print(f"PyTorch: {torch.__version__}")
 if device == "cuda":
     print(f"GPU: {torch.cuda.get_device_name()}")
-    print(f"VRAM: {torch.cuda.get_device_properties(0).total_mem / 1e9:.1f} GB")
+    print(f"VRAM: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB")
 
 npz_path = PATHS.data_processed / PATHS.dataset_file
 assert npz_path.exists(), f"Missing: {npz_path}"
