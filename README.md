@@ -4,8 +4,6 @@
 
 Generate editable piano rolls conditioned on musical genre using a class-conditional DDPM. Trained on the Lakh Pianoroll Dataset. Outputs are MIDI files playable in any DAW.
 
-Course: Generative AI — Dr. Praphul Chandra, Atria University
-Sprint: 4 days
 
 ---
 
