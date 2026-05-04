@@ -7,15 +7,13 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from typing import Tuple
 
-import sys
-sys.path.append(".")
 from configs.config import DATA, TRAIN
 
 
 class PianoRollDataset(Dataset):
     """
     Each item: ((1, 64, 88) tensor, int label)
-    Augmentation: time shift + pitch transpose (musically valid).
+    Augmentation: time shift + pitch transpose (zero-padded, non-circular).
     """
 
     def __init__(self, X: np.ndarray, y: np.ndarray, augment: bool = False):
@@ -38,11 +36,31 @@ class PianoRollDataset(Dataset):
 
     @staticmethod
     def _augment(roll: torch.Tensor) -> torch.Tensor:
-        """Time shift ±8 steps, pitch transpose ±2 semitones (circular roll)."""
+        """Time shift ±8 steps, pitch transpose ±2 semitones (zero-padded, non-circular).
+
+        Uses torch.roll followed by zeroing the vacated boundary so that no values
+        wrap from one end to the other — musically invalid wrap-around is avoided.
+        Silence is represented as -1 in the [-1, 1] scaled space.
+        """
         time_shift  = torch.randint(-8, 9, (1,)).item()
         pitch_shift = torch.randint(-2, 3, (1,)).item()
-        roll = torch.roll(roll, shifts=time_shift, dims=1)
-        roll = torch.roll(roll, shifts=pitch_shift, dims=2)
+
+        # Time shift along dim=1; fill vacated boundary with -1 (silence)
+        if time_shift != 0:
+            roll = torch.roll(roll, shifts=time_shift, dims=1)
+            if time_shift > 0:
+                roll[:, :time_shift, :] = -1.0
+            else:
+                roll[:, time_shift:, :] = -1.0
+
+        # Pitch shift along dim=2; fill vacated boundary with -1 (silence)
+        if pitch_shift != 0:
+            roll = torch.roll(roll, shifts=pitch_shift, dims=2)
+            if pitch_shift > 0:
+                roll[:, :, :pitch_shift] = -1.0
+            else:
+                roll[:, :, pitch_shift:] = -1.0
+
         return roll
 
 

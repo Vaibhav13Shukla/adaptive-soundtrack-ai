@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "adaptive-soundtrack-ai"
+version = "0.1.0"
+description = "Genre-controlled piano roll generation using Conditional DDPM"
+requires-python = ">=3.9"
+dependencies = [
+    "torch>=2.0.0",
+    "numpy>=1.24.0",
+    "matplotlib>=3.7.0",
+    "pretty_midi>=0.2.10",
+    "tqdm>=4.65.0",
+    "streamlit>=1.28.0",
+    "fastapi>=0.111.0",
+    "uvicorn[standard]>=0.29.0",
+    "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+dev = ["ruff>=0.4.0", "pytest>=7.0"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*", "configs*", "api*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+# E501 = line too long (handled by formatter, not enforced in CI)
+ignore = ["E501"]

@@ -7,6 +7,11 @@ from pathlib import Path
 from typing import List
 
 
+def _default_repo_root() -> Path:
+    """Resolve repo root from this file's location, independent of CWD."""
+    return Path(__file__).parent.parent.resolve()
+
+
 @dataclass
 class DataConfig:
     # Genre selection — top 4 with most samples in LPD
@@ -16,7 +21,7 @@ class DataConfig:
 
     # Piano roll preprocessing
     pitch_lo: int = 21          # MIDI 21 = A0 (lowest piano key)
-    pitch_hi: int = 109         # MIDI 108 = C8 (highest), gives 88 keys
+    pitch_hi: int = 109         # exclusive upper bound: range(21, 109) gives 88 MIDI pitches (21–108)
     resample_factor: int = 6    # 24 steps/beat → 4 steps/beat (16th notes)
     window_size: int = 64       # 64 timesteps = 4 bars at 4/4
     piano_track_idx: int = 1    # LPD-5: 0=Drums, 1=Piano, 2=Guitar, 3=Bass, 4=Strings
@@ -36,12 +41,14 @@ class ModelConfig:
     channel_mults: List[int] = field(default_factory=lambda: [1, 2, 4])
     n_res_blocks: int = 2
     dropout: float = 0.1
-    n_genres: int = 4   # null token added internally for CFG
+    n_genres: int = 4           # null token added internally for CFG
+    attn_heads: int = 4         # self-attention heads at U-Net bottleneck
 
     # Diffusion schedule
     T: int = 1000
-    beta_start: float = 1e-4
-    beta_end: float = 0.02
+    beta_schedule: str = "cosine"   # "cosine" (recommended) or "linear"
+    beta_start: float = 1e-4        # used only when beta_schedule="linear"
+    beta_end: float = 0.02          # used only when beta_schedule="linear"
 
     # CFG
     cfg_dropout: float = 0.15   # prob of nulling genre during training
@@ -52,12 +59,14 @@ class ModelConfig:
 class TrainConfig:
     batch_size: int = 64
     lr: float = 2e-4
+    lr_min: float = 1e-6        # cosine-annealing floor
     n_epochs: int = 60          # 60 epochs reasonable for 4-day sprint
     save_every: int = 5         # checkpoint every 5 epochs
     sample_every: int = 10      # generate samples every 10 epochs
     grad_clip: float = 1.0
     num_workers: int = 2
     resume: bool = True
+    use_amp: bool = True        # mixed-precision training (CUDA only)
 
 
 @dataclass
@@ -71,7 +80,7 @@ class InferConfig:
 @dataclass
 class PathConfig:
     """All paths used across the project."""
-    repo_root: Path = Path(".")
+    repo_root: Path = field(default_factory=_default_repo_root)
 
     @property
     def data_processed(self) -> Path:

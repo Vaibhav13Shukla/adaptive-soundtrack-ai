@@ -2,8 +2,7 @@
 Evaluation metrics for generated piano rolls.
 """
 import numpy as np
-from typing import Dict, List
-from collections import Counter
+from typing import Dict
 
 
 def pitch_entropy(roll: np.ndarray) -> float:
@@ -27,9 +26,13 @@ def note_density(roll: np.ndarray) -> float:
 
 
 def scale_consistency(roll: np.ndarray) -> float:
-    """
-    Fraction of notes that belong to the most common scale.
-    Uses pitch classes (mod 12). Higher = more tonal.
+    """Fraction of active pitches that fit within the best-matching scale.
+
+    Checks major, natural minor, pentatonic major, and blues scales across all
+    12 roots.  Higher = more tonal / scale-consistent.
+
+    Using only the major scale (as before) penalised valid Rap/Electronic
+    content that follows pentatonic or minor patterns.
     """
     active_pitches = np.where(roll.sum(axis=0) > 0)[0]
     if len(active_pitches) == 0:
@@ -37,13 +40,20 @@ def scale_consistency(roll: np.ndarray) -> float:
 
     pitch_classes = active_pitches % 12
 
-    # Major scale patterns (all 12 rotations)
-    major = {0, 2, 4, 5, 7, 9, 11}
+    # Scale patterns (interval sets relative to root)
+    scale_patterns = {
+        "major":      {0, 2, 4, 5, 7, 9, 11},
+        "minor":      {0, 2, 3, 5, 7, 8, 10},
+        "pentatonic": {0, 2, 4, 7, 9},
+        "blues":      {0, 3, 5, 6, 7, 10},
+    }
+
     best_match = 0.0
-    for root in range(12):
-        scale = {(p + root) % 12 for p in major}
-        match = sum(1 for pc in pitch_classes if pc in scale) / len(pitch_classes)
-        best_match = max(best_match, match)
+    for intervals in scale_patterns.values():
+        for root in range(12):
+            scale = {(p + root) % 12 for p in intervals}
+            match = sum(1 for pc in pitch_classes if pc in scale) / len(pitch_classes)
+            best_match = max(best_match, match)
 
     return best_match
 

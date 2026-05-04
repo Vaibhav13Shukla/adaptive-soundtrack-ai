@@ -1,0 +1,35 @@
+# Git
+.git
+.gitignore
+
+# Data (never baked into image — too large and gitignored)
+data/
+*.npz
+*.npy
+*.tar.gz
+*.zip
+
+# Checkpoints (mounted as volume at runtime)
+checkpoints/*.pt
+checkpoints/*.pth
+
+# Python cache
+__pycache__/
+*.py[cod]
+.env
+venv/
+.venv/
+
+# Outputs (runtime-generated, mounted as volume)
+outputs/
+plots/
+logs/
+
+# Dev / CI tooling (not needed in production image)
+.github/
+notebooks/
+tests/
+
+# IDE
+.vscode/
+.DS_Store

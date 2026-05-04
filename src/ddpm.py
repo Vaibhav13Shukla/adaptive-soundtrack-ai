@@ -8,13 +8,12 @@ Connects to course concepts:
 - DDIM: deterministic skip-step sampling (50 steps vs 1000)
 - CFG: train both cond + uncond in one model, interpolate at inference
 """
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Tuple, Optional
 
-import sys
-sys.path.append(".")
 from configs.config import MODEL
 
 
@@ -26,16 +25,33 @@ class DDPM(nn.Module):
         self.cfg_dropout = cfg.cfg_dropout
         self.n_genres    = cfg.n_genres
 
-        # Linear noise schedule
-        betas       = torch.linspace(cfg.beta_start, cfg.beta_end, cfg.T)
-        alphas      = 1.0 - betas
-        alpha_bars  = torch.cumprod(alphas, dim=0)
+        # Build noise schedule
+        if cfg.beta_schedule == "cosine":
+            betas = self._cosine_betas(cfg.T)
+        else:
+            betas = torch.linspace(cfg.beta_start, cfg.beta_end, cfg.T)
+
+        alphas     = 1.0 - betas
+        alpha_bars = torch.cumprod(alphas, dim=0)
 
         self.register_buffer("betas",                       betas)
         self.register_buffer("alphas",                      alphas)
         self.register_buffer("alpha_bars",                  alpha_bars)
         self.register_buffer("sqrt_alpha_bars",             torch.sqrt(alpha_bars))
         self.register_buffer("sqrt_one_minus_alpha_bars",   torch.sqrt(1.0 - alpha_bars))
+
+    @staticmethod
+    def _cosine_betas(T: int, s: float = 0.008) -> torch.Tensor:
+        """Improved cosine noise schedule (Nichol & Dhariwal, 2021).
+
+        Distributes learning signal more evenly across timesteps than the
+        linear schedule, particularly important for sparse data like piano rolls.
+        """
+        steps     = torch.arange(T + 1, dtype=torch.float64)
+        f         = torch.cos(((steps / T + s) / (1 + s)) * math.pi / 2) ** 2
+        alpha_bar = f / f[0]
+        betas     = 1.0 - alpha_bar[1:] / alpha_bar[:-1]
+        return betas.clamp(min=1e-5, max=0.9999).float()
 
     # ── Forward diffusion (training) ──────────────────────────────
     def q_sample(self, x0: torch.Tensor, t: torch.Tensor,
@@ -82,6 +98,8 @@ class DDPM(nn.Module):
         Returns piano roll in [-1, 1] range — caller binarizes if needed.
         """
         device = next(self.model.parameters()).device
+        # Normalize g to the model's device regardless of where the caller created it
+        g      = g.to(device)
         B      = shape[0]
         x      = torch.randn(shape, device=device)
         g_null = torch.full((B,), self.n_genres, device=device).long()
@@ -109,8 +127,10 @@ class DDPM(nn.Module):
                      * torch.sqrt(1 - ab_cur / ab_next))
             noise = torch.randn_like(x) if eta > 0 else torch.zeros_like(x)
 
+            # Clamp before sqrt to prevent NaN when eta > 0 causes (1-ab_next-σ²) < 0
+            dir_coef = (1 - ab_next - sigma ** 2).clamp(min=0.0)
             x = (torch.sqrt(ab_next) * x0_pred
-                 + torch.sqrt(1 - ab_next - sigma ** 2) * eps
+                 + torch.sqrt(dir_coef) * eps
                  + sigma * noise)
 
         return x   # [-1, 1] range; caller does (x > 0) for binary

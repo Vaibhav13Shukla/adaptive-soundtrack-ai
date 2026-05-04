@@ -2,8 +2,7 @@
 Single entry point. Run: python train.py
 Auto-resumes from latest checkpoint.
 """
-import sys, torch
-sys.path.append(".")
+import torch
 
 from configs.config import MODEL, TRAIN, PATHS
 from src.dataset    import make_dataloaders
@@ -26,9 +25,12 @@ def main():
 
     train_loader, val_loader, genres = make_dataloaders(str(npz))
 
-    unet  = UNet(MODEL).to(device)
-    ddpm  = DDPM(unet, MODEL).to(device)
-    optim = torch.optim.AdamW(unet.parameters(), lr=TRAIN.lr)
+    unet      = UNet(MODEL).to(device)
+    ddpm      = DDPM(unet, MODEL).to(device)
+    optim     = torch.optim.AdamW(unet.parameters(), lr=TRAIN.lr)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optim, T_max=TRAIN.n_epochs, eta_min=TRAIN.lr_min
+    )
 
     n_params = sum(p.numel() for p in unet.parameters())
     print(f"Parameters: {n_params:,}")
@@ -37,6 +39,8 @@ def main():
         ddpm, optim, device,
         ckpt_dir=PATHS.checkpoints,
         log_path=PATHS.logs / "train_log.json",
+        scheduler=scheduler,
+        use_amp=TRAIN.use_amp,
     )
     trainer.fit(train_loader, val_loader, n_epochs=TRAIN.n_epochs)
 
