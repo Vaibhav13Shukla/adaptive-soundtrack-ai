@@ -9,6 +9,7 @@ WHY this design:
 - Genre conditioning via learned embedding added to time embedding.
   Simple, sufficient for 4 classes. Class slide showed exactly this.
 - FiLM conditioning in ResBlocks (scale + shift) — standard DDPM trick.
+- AttentionBlock at bottleneck captures long-range melodic dependencies.
 """
 import math
 import torch
@@ -16,8 +17,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Optional
 
-import sys
-sys.path.append(".")
 from configs.config import MODEL
 
 
@@ -34,8 +33,10 @@ class SinusoidalPosEmb(nn.Module):
     def forward(self, t: torch.Tensor) -> torch.Tensor:
         device = t.device
         half   = self.dim // 2
+        # Standard spacing: arange(half) / half gives exponents in [0, (half-1)/half]
+        # matching the original "Attention Is All You Need" formulation.
         freqs  = torch.exp(
-            -math.log(10000) * torch.arange(half, device=device) / max(half - 1, 1)
+            -math.log(10000) * torch.arange(half, device=device) / half
         )
         args = t[:, None].float() * freqs[None]
         return torch.cat([args.sin(), args.cos()], dim=-1)
@@ -93,6 +94,30 @@ class ResBlock(nn.Module):
         return h + self.res_conv(x)
 
 
+# ── Self-attention block (bottleneck) ─────────────────────────────
+class AttentionBlock(nn.Module):
+    """Spatial self-attention applied at the U-Net bottleneck.
+
+    Captures long-range dependencies across the piano-roll time axis that
+    pure convolutions cannot reach — essential for 4-bar melodic structure.
+    """
+    def __init__(self, channels: int, num_heads: int = 4):
+        super().__init__()
+        self.norm = nn.GroupNorm(min(8, channels), channels)
+        # Ensure num_heads evenly divides channels
+        while num_heads > 1 and channels % num_heads != 0:
+            num_heads //= 2
+        self.attn = nn.MultiheadAttention(channels, num_heads, batch_first=True)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        B, C, H, W = x.shape
+        h = self.norm(x)
+        h = h.reshape(B, C, H * W).permute(0, 2, 1)   # (B, H*W, C)
+        h, _ = self.attn(h, h, h)
+        h = h.permute(0, 2, 1).reshape(B, C, H, W)
+        return x + h                                    # residual connection
+
+
 # ── Down / Up sample ──────────────────────────────────────────────
 class Downsample(nn.Module):
     def __init__(self, ch: int):
@@ -113,7 +138,7 @@ class Upsample(nn.Module):
 # ── Full U-Net ─────────────────────────────────────────────────────
 class UNet(nn.Module):
     """
-    Encoder ↓ Bottleneck → Decoder ↑ with skip connections.
+    Encoder ↓ Bottleneck (+ Attention) → Decoder ↑ with skip connections.
     Time + genre embedding is injected into every ResBlock.
     """
     def __init__(self, cfg=MODEL):
@@ -142,9 +167,10 @@ class UNet(nn.Module):
             self.downs.append(Downsample(out_ch) if i < len(chs) - 1 else nn.Identity())
             in_ch = out_ch
 
-        # Bottleneck
-        self.mid1 = ResBlock(in_ch, in_ch, time_dim, cfg.dropout)
-        self.mid2 = ResBlock(in_ch, in_ch, time_dim, cfg.dropout)
+        # Bottleneck + attention
+        self.mid1     = ResBlock(in_ch, in_ch, time_dim, cfg.dropout)
+        self.mid_attn = AttentionBlock(in_ch, num_heads=cfg.attn_heads)
+        self.mid2     = ResBlock(in_ch, in_ch, time_dim, cfg.dropout)
 
         # Decoder
         self.dec = nn.ModuleList()
@@ -178,6 +204,7 @@ class UNet(nn.Module):
 
         # Bottleneck
         h = self.mid1(h, temb)
+        h = self.mid_attn(h)
         h = self.mid2(h, temb)
 
         # Decoder

@@ -2,19 +2,16 @@
 Streamlit demo — Adaptive Soundtrack AI
 Run: streamlit run app.py
 """
-import sys, io, time
+import time
 import torch
 import numpy as np
 import streamlit as st
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
-from pathlib import Path
 
-sys.path.append(".")
 from configs.config import MODEL, INFER, DATA, PATHS
 from src.unet       import UNet
 from src.ddpm       import DDPM
-from src.midi_utils import piano_roll_to_midi
+from src.midi_utils import piano_roll_to_midi_bytes
 
 # ── Page ─────────────────────────────────────────────────────────
 st.set_page_config(
@@ -57,7 +54,7 @@ def load_model():
     try:
         unet  = UNet(MODEL).to(device)
         ddpm  = DDPM(unet, MODEL).to(device)
-        state = torch.load(ckpt_path, map_location=device)
+        state = torch.load(ckpt_path, map_location=device, weights_only=True)
         ddpm.load_state_dict(state["model"])
         ddpm.eval()
         val_loss = state.get("val_loss", "—")
@@ -131,8 +128,6 @@ tab1, tab2, tab3 = st.tabs(["Generate", "How it works", "Metrics"])
 
 with tab1:
     if generate_btn:
-        PATHS.midi_examples.mkdir(parents=True, exist_ok=True)
-
         progress = st.progress(0, text="Starting DDIM sampling...")
         t0 = time.time()
 
@@ -209,21 +204,16 @@ with tab1:
                 s1.metric("Pitch range", stats["pitch_range"])
                 s2.metric("Entropy", f"{stats['entropy']:.2f}")
 
-                # MIDI export
-                midi_path = PATHS.midi_examples / f"gen_{genre}_{i}.mid"
-                piano_roll_to_midi(
-                    roll, str(midi_path),
-                    pitch_lo=DATA.pitch_lo
+                # MIDI export — generate in memory (no shared filesystem state)
+                midi_bytes = piano_roll_to_midi_bytes(roll, pitch_lo=DATA.pitch_lo)
+                st.download_button(
+                    label=f"⬇ Download MIDI {i+1}",
+                    data=midi_bytes,
+                    file_name=f"{genre}_{i+1}.mid",
+                    mime="audio/midi",
+                    use_container_width=True,
+                    key=f"dl_{i}",
                 )
-                with open(midi_path, "rb") as f:
-                    st.download_button(
-                        label=f"⬇ Download MIDI {i+1}",
-                        data=f.read(),
-                        file_name=f"{genre}_{i+1}.mid",
-                        mime="audio/midi",
-                        use_container_width=True,
-                        key=f"dl_{i}",
-                    )
 
         progress.progress(100, text=f"Done in {elapsed:.1f}s")
         st.success(

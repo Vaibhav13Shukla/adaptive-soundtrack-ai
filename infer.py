@@ -4,11 +4,10 @@ Generate piano rolls + MIDI from trained checkpoint.
 Usage:
   python infer.py --genre Jazz --n_samples 4
 """
-import argparse, sys, torch
+import argparse
+import torch
 import numpy as np
 import matplotlib.pyplot as plt
-from pathlib import Path
-sys.path.append(".")
 
 from configs.config import MODEL, INFER, DATA, PATHS
 from src.unet       import UNet
@@ -17,9 +16,9 @@ from src.midi_utils import piano_roll_to_midi
 
 
 def load_model(ckpt_path: str, device: str):
-    unet = UNet(MODEL).to(device)
-    ddpm = DDPM(unet, MODEL).to(device)
-    state = torch.load(ckpt_path, map_location=device)
+    unet  = UNet(MODEL).to(device)
+    ddpm  = DDPM(unet, MODEL).to(device)
+    state = torch.load(ckpt_path, map_location=device, weights_only=True)
     ddpm.load_state_dict(state["model"])
     ddpm.eval()
     return ddpm
@@ -55,21 +54,21 @@ def main():
     rolls = generate(ddpm, genre_idx, args.n_samples, device)
 
     # Save MIDI + visual
-    fig, axes = plt.subplots(1, args.n_samples, figsize=(4*args.n_samples, 4))
+    fig, axes = plt.subplots(1, args.n_samples, figsize=(4 * args.n_samples, 4))
     if args.n_samples == 1:
         axes = [axes]
     for i, roll in enumerate(rolls):
         midi_path = PATHS.midi_examples / f"generated_{args.genre}_{i}.mid"
-        piano_roll_to_midi(roll, str(midi_path),
-                           pitch_lo=DATA.pitch_lo)
+        piano_roll_to_midi(roll, str(midi_path), pitch_lo=DATA.pitch_lo)
         axes[i].imshow(roll.T, aspect="auto", origin="lower",
                        cmap="Purples", interpolation="nearest")
-        axes[i].set_title(f"{args.genre} {i+1}")
+        axes[i].set_title(f"{args.genre} {i + 1}")
         axes[i].set_xlabel("Time"); axes[i].set_ylabel("Pitch")
 
     plot_path = PATHS.plots / f"generated_{args.genre}.png"
     plt.tight_layout()
     plt.savefig(plot_path, dpi=120, bbox_inches="tight")
+    plt.close(fig)
     print(f"\n✓ Saved {args.n_samples} MIDI files → {PATHS.midi_examples}")
     print(f"✓ Plot → {plot_path}")
 
